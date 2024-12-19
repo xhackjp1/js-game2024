@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <!-- canvas要素を中央に表示する -->
+  <canvas id="canvas" width="400" height="800"
+    style="background-color: black; margin: 0 auto; display: block;"></canvas>
+  <script>
+    const canvas = document.getElementById("canvas")
+    const ctx = canvas.getContext("2d")
+    const BLOCK_SIZE = 50
+    const COLORS = ["red", "blue", "green", "yellow"]
+    const BLOCK_FALL_INTERVAL = 500 
+    // 上下左右の方向を定義
+    const DIRECTIONS = [
+      { dx: 0, dy: -1 },  // 上
+      { dx: 0, dy: 1 },   // 下
+      { dx: -1, dy: 0 },  // 左
+      { dx: 1, dy: 0 }    // 右
+    ];
+
+    const blocks = []
+    let currentBlock = null
+    let findItems = []
+
+    // パズルブロックの一つ一つを表すクラスを作成する
+    // ブロックは、x座標、y座標、幅、高さ、色を持つ
+    class Block {
+      constructor(x, y, color) {
+        this.x = x
+        this.y = y
+        this.size = BLOCK_SIZE
+        this.color = color
+      }
+
+      moveLeft() {
+        let isSameBlock = false
+        // 移動先にブロックがない場合、左に移動する
+        blocks.forEach(block => {
+          // 移動先の座標ブロックを作る
+          const newBlock = new Block(this.x - BLOCK_SIZE, this.y, this.color)
+          if (block.isSamePosition(newBlock)) {
+            isSameBlock = true
+            return
+          }
+        })
+
+        if (this.x > 0 && !isSameBlock) {
+          this.x -= BLOCK_SIZE
+        }
+      }
+
+      moveRight() {
+        let isSameBlock = false
+        // 移動先にブロックがない場合、左に移動する
+        blocks.forEach(block => {
+          // 移動先の座標ブロックを作る
+          const newBlock = new Block(this.x + BLOCK_SIZE, this.y, this.color)
+          if (block.isSamePosition(newBlock)) {
+            isSameBlock = true
+            return
+          }
+        })
+
+        if (this.x + BLOCK_SIZE < canvas.width && !isSameBlock) {
+          this.x += BLOCK_SIZE
+        }
+      }
+
+      // 同じ色のブロックかどうかを判定する
+      isSameBlock = (block) => {
+        return this.x === block.x && this.y === block.y && this.color === block.color
+      }
+
+      // 同じ座標かどうかを判定する
+      isSamePosition = (block) => {
+        return this.x === block.x && this.y === block.y
+      }
+
+      // ブロックを描画する
+      draw() {
+        ctx.fillStyle = this.color
+        ctx.fillRect(this.x, this.y, this.size, this.size)
+      }
+
+      // ブロックが落下できるかどうかを判定する
+      canFallDown() {
+        return this.y + BLOCK_SIZE < canvas.height && !this.hasUnderBlock()
+      }
+
+      // ブロックの下にブロックがあるかどうかを判定する
+      hasUnderBlock() {
+        let hasUnderBlockFlg = false
+        const nextBlock = new Block(this.x, this.y + BLOCK_SIZE, this.color)
+        blocks.forEach(block => {
+          if (block.isSamePosition(nextBlock)) {
+            hasUnderBlockFlg = true
+          }
+        })
+        return hasUnderBlockFlg
+      }
+
+      // 自由落下するメソッド
+      fall() {
+        if (this.canFallDown()) {
+          this.y += BLOCK_SIZE
+        } else {
+          currentBlock = null
+          // 落下できない場合、新しいブロックを作成する
+          setTimeout(() => {
+            createBlock()
+          }, BLOCK_FALL_INTERVAL)
+        }
+      }
+
+      forceFall() {
+        // 落下できる限り下まで落とす
+        while (this.canFallDown()) {
+          this.y += BLOCK_SIZE
+        }
+      }
+    }
+
+
+    const createBlock = () => {
+      const x = Math.floor(Math.random() * 8) * BLOCK_SIZE
+      const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)]
+      const block = new Block(x, 0, randomColor)
+      currentBlock = block
+      blocks.push(currentBlock)
+    }
+
+    // 最初の一個は自動で作成
+    createBlock()
+
+    // 毎回呼び出される、探索の関数
+    const checkBlock = () => {
+      // 全てのブロックに対して処理をする
+      blocks.forEach(block => {
+        // 初期化
+        findItems = [block]
+
+        // 全ての方向に探索して、同じ色のブロックを探す
+        connectedBlocks(block)
+
+        // 4つ以上同じ色のブロックが繋がっている場合の処理
+        if (findItems.length >= 4) {
+          // 削除する
+          findItems.forEach(item => {
+            blocks.splice(blocks.indexOf(item), 1)
+          })
+          // 削除したあと、fallメソッドを呼び出す
+          blocks.forEach(block => {
+            block.forceFall()
+          })
+        }
+      })
+    }
+
+    // 上下左右に探索する関数
+    const connectedBlocks = (baseBlock) => {
+      // 4方向に探索する(上下左右)
+      DIRECTIONS.forEach(direction => {
+        const searchBlock = {
+          x: baseBlock.x + (direction.dx * BLOCK_SIZE),
+          y: baseBlock.y + (direction.dy * BLOCK_SIZE),
+          color: baseBlock.color
+        }
+
+        blocks.forEach(block => {
+          if (block.isSameBlock(searchBlock)) {
+            // 自分自身を含めて、まだ探索していない場合
+            if (!findItems.includes(block)) {
+              findItems.push(block)
+              // 見つかった同色のブロックもさらに再起的に探索する
+              return connectedBlocks(block)
+            }
+          }
+        })
+      })
+    }
+
+    // ブロックを描画する
+    const interval = setInterval(() => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      if (currentBlock) {
+        currentBlock.fall()
+      }
+    
+      blocks.forEach(block => {
+        block.draw()
+      })
+
+      // ブロックが揃ったかどうかを判定する
+      checkBlock()
+    }, 100)
+
+    // キーボードの入力を受け付ける
+    document.addEventListener("keydown", e => {
+      if (currentBlock === null) {
+        return
+      }
+
+      if (e.key === "ArrowLeft") {
+        currentBlock.moveLeft()
+      } else if (e.key === "ArrowRight") {
+        currentBlock.moveRight()
+      }
+    })
+
+  </script>
+</body>
+
+</html>
